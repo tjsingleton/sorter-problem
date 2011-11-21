@@ -5,7 +5,10 @@ class SortedPersonList
   DEFAULT_SORT   = :last_name_desc
 
   def self.add_sort(label, &block)
-    SORTS[label] = block
+    sorter = CompositeSorter.new
+    block.call(sorter)
+
+    SORTS[label] = sorter.to_proc
   end
 
   def self.from_string(input, options = {})
@@ -21,36 +24,66 @@ class SortedPersonList
     list
   end
 
-  class Sorter
-    DEFAULT_DIRECTION = :asc
+  class CompositeSorter
+    def initialize
+      @sorters = []
+    end
 
-    def initialize(*args)
-      options    = args.last.kind_of?(Hash) ? args.pop : {}
-      @direction = options.fetch(:direction) { DEFAULT_DIRECTION }
-      @fields    = args
+    def add(&block)
+      @sorters << block
     end
 
     def to_proc
-      @direction == :asc ?  asc_sort : desc_sort
+      ->(a, b){ sort(a, b) }
     end
 
     private
-    def asc_sort
-      ->(a,b) { select_fields(a) <=> select_fields(b) }
-    end
+    def sort(a, b)
+      result = 0
 
-    def desc_sort
-      ->(a,b) { select_fields(b) <=> select_fields(a) }
-    end
+      @sorters.each do |sorter|
+        result = sorter[a, b]
+        break unless result == 0
+      end
 
-    def select_fields(obj)
-      @fields.map {|n| obj.send(n) }
+      result
     end
   end
 
-  add_sort :last_name_desc,   &Sorter.new(:last_name, direction: :desc)
-  add_sort :gender_last_name, &Sorter.new(:gender, :last_name)
-  add_sort :date_last_name,   &Sorter.new(:date_of_birth, :last_name)
+  class Sorter
+    DEFAULT_DIRECTION = :asc
+
+    def initialize(field, options = {})
+      @direction = options.fetch(:direction) { DEFAULT_DIRECTION }
+      @field     = field
+    end
+
+    def to_proc
+      @direction == :asc ?
+          ->(a, b){ sort(a, b) } :
+          ->(a, b){ sort(b, a) }
+    end
+
+    private
+    def sort(a, b)
+      a.send(@field) <=> b.send(@field)
+    end
+  end
+
+  add_sort :last_name_desc do |sorter|
+    sorter.add &Sorter.new(:last_name, direction: :desc)
+  end
+
+  add_sort :gender_last_name do |sorter|
+    sorter.add &Sorter.new(:gender)
+    sorter.add &Sorter.new(:last_name)
+  end
+
+  add_sort :date_last_name do |sorter|
+    sorter.add &Sorter.new(:date_of_birth)
+    sorter.add &Sorter.new(:last_name)
+  end
+
 
   def initialize(sorter)
     @sorter = sorter
