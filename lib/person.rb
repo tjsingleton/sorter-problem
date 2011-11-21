@@ -17,6 +17,10 @@ class Person
     "#{@first_name} #{@last_name}"
   end
 
+  def [](field)
+    instance_variable_get "@#{field}"
+  end
+
   def ==(other)
     to_a == other.to_a
   end
