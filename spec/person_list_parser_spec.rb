@@ -2,8 +2,6 @@ require_relative "spec_helper"
 require_relative "../lib/person_list_parser"
 
 describe PersonListParser do
-
-
   it "returns a parser for the format" do
     parser = PersonListParser.parser_for(:csv)
     parser.should == PersonListParser::CSV
